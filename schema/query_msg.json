@@ -1,15 +1,16 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "QueryMsg",
-  "anyOf": [
+  "oneOf": [
     {
       "type": "object",
       "required": [
-        "get_count"
+        "number"
       ],
       "properties": {
-        "get_count": {
-          "type": "object"
+        "number": {
+          "type": "object",
+          "additionalProperties": false
         }
       },
       "additionalProperties": false
