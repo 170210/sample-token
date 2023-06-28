@@ -1,1 +1,0 @@
-219378ebf5184522e48737b877f16188fa0110e6f782aab86fe6a2989207090e  ./target/wasm32-unknown-unknown/release/sample_token.wasm
