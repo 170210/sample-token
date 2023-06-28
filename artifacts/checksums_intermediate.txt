@@ -1,1 +1,1 @@
-d407f01389fceec52f1195bd1b6a01b5d7580fe918e79137027ea9a614d3255d  ./target/wasm32-unknown-unknown/release/sample_token.wasm
+219378ebf5184522e48737b877f16188fa0110e6f782aab86fe6a2989207090e  ./target/wasm32-unknown-unknown/release/sample_token.wasm

@@ -5,10 +5,32 @@
     {
       "type": "object",
       "required": [
-        "increment"
+        "add"
       ],
       "properties": {
-        "increment": {
+        "add": {
+          "type": "object",
+          "required": [
+            "value"
+          ],
+          "properties": {
+            "value": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": [
+        "submsg_reply_increment"
+      ],
+      "properties": {
+        "submsg_reply_increment": {
           "type": "object",
           "required": [
             "value"

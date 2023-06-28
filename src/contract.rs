@@ -1,21 +1,22 @@
 use cosmwasm_std::{
-    callable_points, entry_point, to_binary, Binary, Deps, DepsMut, Env, MessageInfo, Response,
-    Storage,
+    dynamic_link, entry_point, from_slice, to_binary, to_vec, wasm_execute, Addr, Binary, Contract,
+    Deps, DepsMut, Env, MessageInfo, Reply, Response, SubMsg,
 };
  
 use crate::error::ContractError;
-use crate::msg::{ExecuteMsg, InstantiateMsg, NumberResponse, QueryMsg};
+use crate::msg::{ExecuteMsg, InstantiateMsg, CalleeExecuteMsg, CalleeQueryMsg, NumberResponse, QueryMsg};
  
-const KEY: &[u8] = b"number";
+const ADDRESS_KEY: &[u8] = b"counter-address";
  
-fn write(storage: &mut dyn Storage, value: i32) {
-    storage.set(KEY, &value.to_be_bytes())
+#[derive(Contract)]
+struct CounterContract {
+    address: Addr,
 }
  
-fn read(storage: &dyn Storage) -> Result<i32, ContractError> {
-    let vec_value = storage.get(KEY).ok_or(ContractError::StorageError)?;
-    let array_value: [u8; 4] = [vec_value[0], vec_value[1], vec_value[2], vec_value[3]];
-    Ok(i32::from_be_bytes(array_value))
+#[dynamic_link(CounterContract)]
+trait Counter: Contract {
+    fn increment(&self, by: i32);
+    fn counter(&self) -> i32;
 }
  
 #[entry_point]
@@ -25,7 +26,7 @@ pub fn instantiate(
     _info: MessageInfo,
     msg: InstantiateMsg,
 ) -> Result<Response, ContractError> {
-    write(deps.storage, msg.value);
+    deps.storage.set(ADDRESS_KEY, &to_vec(&msg.callee_addr)?);
     Ok(Response::default())
 }
  
@@ -37,42 +38,67 @@ pub fn execute(
     msg: ExecuteMsg,
 ) -> Result<Response, ContractError> {
     match msg {
-        ExecuteMsg::Increment { value } => handle_increment(deps, value),
+        ExecuteMsg::Add { value } => handle_add(deps.as_ref(), value),
+        ExecuteMsg::SubmsgReplyIncrement { value } => handle_submsg_reply_increment(deps.as_ref(), value),
     }
 }
  
-fn handle_increment(deps: DepsMut, by: i32) -> Result<Response, ContractError> {
-    let value = read(deps.storage)?;
-    let new_value = value.checked_add(by).ok_or(ContractError::Overflow)?;
-    write(deps.storage, new_value);
+fn handle_add(deps: Deps, by: i32) -> Result<Response, ContractError> {
+    let address: Addr = from_slice(&deps.storage.get(ADDRESS_KEY).unwrap())?;
+    let contract = CounterContract {
+        address: address.clone(),
+    };
+    contract.increment(by);
     Ok(Response::default())
 }
  
  
+fn handle_submsg_reply_increment(deps: Deps, by: i32) -> Result<Response, ContractError> {
+    let contract_addr: Addr = from_slice(&deps.storage.get(ADDRESS_KEY).unwrap())?;
+    let execute_msg = SubMsg::reply_on_success(
+        wasm_execute(contract_addr, &CalleeExecuteMsg::Increment { value: by }, vec![])?,
+        0,
+    );
+    let response = Response::default().add_submessage(execute_msg);
+    Ok(response)
+}
+ 
+#[entry_point]
+pub fn reply(deps: DepsMut, _env: Env, _msg: Reply) -> Result<Response, ContractError> {
+    let address: Addr = from_slice(&deps.storage.get(ADDRESS_KEY).unwrap())?;
+    let contract = CounterContract {
+        address: address.clone(),
+    };
+    let value_dyn = contract.counter();
+    let res: NumberResponse = deps
+        .querier
+        .query_wasm_smart(address, &CalleeQueryMsg::Number {})?;
+    let response = Response::default()
+        .add_attribute("value_by_dynamic", value_dyn.to_string())
+        .add_attribute("value_by_query", res.value.to_string());
+ 
+    Ok(response)
+}
  
 #[entry_point]
 pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> Result<Binary, ContractError> {
     match msg {
-        QueryMsg::Number {} => Ok(to_binary(&query_number(deps)?)?),
+        QueryMsg::Counter {} => Ok(to_binary(&query_counter(deps)?)?),
+        QueryMsg::CounterDyn {} => Ok(to_binary(&query_counter_dyn(deps)?)?),
     }
 }
  
-fn query_number(deps: Deps) -> Result<NumberResponse, ContractError> {
-    let value = read(deps.storage)?;
+fn query_counter(deps: Deps) -> Result<NumberResponse, ContractError> {
+    let address: Addr = from_slice(&deps.storage.get(ADDRESS_KEY).unwrap())?;
+    let response: NumberResponse = deps
+        .querier
+        .query_wasm_smart(address, &CalleeQueryMsg::Number {})?;
+    Ok(response)
+}
+
+fn query_counter_dyn(deps: Deps) -> Result<NumberResponse, ContractError> {
+    let address: Addr = from_slice(&deps.storage.get(ADDRESS_KEY).unwrap())?;
+    let contract = CounterContract { address };
+    let value = contract.counter();
     Ok(NumberResponse { value })
-}
- 
-#[callable_points]
-mod callable_points {
-    use super::*;
- 
-    #[callable_point]
-    fn increment(deps: DepsMut, _env: Env, by: i32) {
-        handle_increment(deps, by).unwrap();
-    }
- 
-    #[callable_point]
-    fn counter(deps: Deps, _env: Env) -> i32 {
-        read(deps.storage).unwrap()
-    }
 }

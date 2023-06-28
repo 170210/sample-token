@@ -5,10 +5,23 @@
     {
       "type": "object",
       "required": [
-        "number"
+        "counter"
       ],
       "properties": {
-        "number": {
+        "counter": {
+          "type": "object",
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": [
+        "counter_dyn"
+      ],
+      "properties": {
+        "counter_dyn": {
           "type": "object",
           "additionalProperties": false
         }
